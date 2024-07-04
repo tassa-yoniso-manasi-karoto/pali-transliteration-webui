@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Pali Transliteration</title>
+  <style>
+    * { font-size: 115%; }
+    .container { display: flex; }
+    .input-group, .output-group {
+      display: flex;
+      flex-direction: column; 
+      width: 50%;
+    }
+    select, textarea { 
+      width: 100%;
+      padding: 15px;
+      box-sizing: border-box;
+    }
+
+    textarea { height: 100vh; resize: none; } 
+
+    select {
+      text-align: center;
+      font-weight: bold;
+      height: auto;
+      min-height: 2.5em;
+      align-self: stretch;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="input-group">
+      <select id="inputSelect">
+        <option value="latin">Latin/Roman</option>
+        <option value="thai1">Thai (Phonetic/Everyday) // อักษรไทย</option>
+        <option value="thai2">Thai (Pintu) // แบบพินทุ</option>
+      </select>
+      <textarea spellcheck="false" id="inputTextArea"></textarea>
+    </div>
+    <div class="output-group">
+      <select id="outputSelect">
+        <option value="latin">Latin/Roman</option>
+        <option value="kana">Katakana // 片仮名</option>
+        <option value="thai2">Thai (Pintu) // แบบพินทุ</option>
+      </select>
+      <textarea spellcheck="false" id="outputTextArea" readonly></textarea>
+    </div>
+  </div>
+
+  <script>
+const inputSelect = document.getElementById("inputSelect");
+const outputSelect = document.getElementById("outputSelect");
+const inputTextArea = document.getElementById("inputTextArea");
+const outputTextArea = document.getElementById("outputTextArea");
+const apiEndpoint = "http://localhost:8080/process";
+
+async function callAPI() {
+    const inputValue = inputTextArea.value;
+    const inputSelection = inputSelect.value;
+    const outputSelection = outputSelect.value;
+    console.log(inputSelection+"🠮"+outputSelection);
+    try {
+        const response = await fetch(apiEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                text: inputValue,
+                inputSelection: inputSelection,
+                outputSelection: outputSelection
+            })
+        });
+        if (!response.ok) throw new Error("API request failed 🤖");
+        const processedText = await response.text();
+        outputTextArea.value = processedText;
+    } catch (error) {
+        console.error(error);
+        outputTextArea.value = "Couldn't reach server";
+    }
+}
+inputTextArea.addEventListener("input", callAPI);
+inputSelect.addEventListener("change", callAPI);
+outputSelect.addEventListener("change", callAPI);
+  </script>
+</body>
+</html>
