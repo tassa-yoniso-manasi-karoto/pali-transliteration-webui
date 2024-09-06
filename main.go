@@ -18,19 +18,104 @@ import (
 	pli "github.com/tassa-yoniso-manasi-karoto/pali-transliteration"
 )
 
-var scheme = map[string]func(string) string{ //
-	"latin🠮latin": func(s string) string { return s },
-	"latin🠮thai2": func(s string) string { return palitrans.RomanToThai(strings.ReplaceAll(s, "’", "")) },
-	"latin🠮kana":  func(s string) string { return pli.LatinToKana(s) },
 
-	"thai1🠮latin": func(s string) string { return pli.ThaiToLatin(s, 1) },
-	"thai1🠮thai2": func(s string) string { return "Not available: everyday thai is a lossy 'encoding' of pali!" },
-	"thai1🠮kana":  func(s string) string { return pli.LatinToKana(pli.ThaiToLatin(s, 1)) },
 
-	"thai2🠮latin": func(s string) string { return pli.ThaiToLatin(s, 2) },
-	"thai2🠮thai2": func(s string) string { return s },
-	"thai2🠮kana":  func(s string) string { return pli.LatinToKana(pli.ThaiToLatin(s, 2)) },
+var ( 
+	scheme = map[string]func(string) string{
+		"latin🠮latin": func(s string) string { return s },
+		"latin🠮thai2": func(s string) string { return palitrans.RomanToThai(strings.ReplaceAll(s, "’", "")) },
+
+		"thai1🠮latin": func(s string) string { return pli.ThaiToLatin(s, 1) },
+		"thai1🠮thai2": func(s string) string { return "Not available: colloquial thai is a lossy encoding of pali!" },
+
+		"thai2🠮latin": func(s string) string { return pli.ThaiToLatin(s, 2) },
+		"thai2🠮thai2": func(s string) string { return s },
+	}
+	index string = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Pali Transliteration</title>
+  <style>
+    * { font-size: 115%; }
+    .container { display: flex; }
+    .input-group, .output-group {
+      display: flex;
+      flex-direction: column; 
+      width: 50%;
+    }
+    select, textarea { 
+      width: 100%;
+      padding: 15px;
+      box-sizing: border-box;
+    }
+
+    textarea { height: 100vh; resize: none; } 
+
+    select {
+      text-align: center;
+      font-weight: bold;
+      height: auto;
+      min-height: 2.5em;
+      align-self: stretch;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="input-group">
+      <select id="inputSelect">
+        <option value="latin">Latin/Roman</option>
+        <option value="thai1">Thai (Colloquial) // อักษรไทย</option>
+        <option value="thai2">Thai (Pintu) // แบบพินทุ</option>
+      </select>
+      <textarea spellcheck="false" id="inputTextArea"></textarea>
+    </div>
+    <div class="output-group">
+      <select id="outputSelect">
+        <option value="latin">Latin/Roman</option>
+        <option value="thai2">Thai (Pintu) // แบบพินทุ</option>
+      </select>
+      <textarea spellcheck="false" id="outputTextArea" readonly></textarea>
+    </div>
+  </div>
+
+  <script>
+const inputSelect = document.getElementById("inputSelect");
+const outputSelect = document.getElementById("outputSelect");
+const inputTextArea = document.getElementById("inputTextArea");
+const outputTextArea = document.getElementById("outputTextArea");
+const apiEndpoint = "http://localhost:8080/process";
+
+async function callAPI() {
+    const inputValue = inputTextArea.value;
+    const inputSelection = inputSelect.value;
+    const outputSelection = outputSelect.value;
+    console.log(inputSelection+"🠮"+outputSelection);
+    try {
+        const response = await fetch(apiEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                text: inputValue,
+                inputSelection: inputSelection,
+                outputSelection: outputSelection
+            })
+        });
+        if (!response.ok) throw new Error("API request failed 🤖");
+        const processedText = await response.text();
+        outputTextArea.value = processedText;
+    } catch (error) {
+        console.error(error);
+        outputTextArea.value = "Couldn't reach server";
+    }
 }
+inputTextArea.addEventListener("input", callAPI);
+inputSelect.addEventListener("change", callAPI);
+outputSelect.addEventListener("change", callAPI);
+  </script>
+</body>
+</html>`
+)
 
 func init() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
@@ -72,15 +157,16 @@ func processTextHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	var tmpl *template.Template
 	exeDir, err := os.Executable()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error getting executable path")
+		tmpl, err = template.ParseFiles(index)
+		log.Info().Msg("Serving built-in index.html")
+	} else {
+		templatePath := filepath.Join(filepath.Dir(exeDir), "index.html")
+		log.Info().Msgf("Serving index.html from: %s", templatePath)
+		tmpl, err = template.ParseFiles(templatePath)
 	}
-	templatePath := filepath.Join(filepath.Dir(exeDir), "index.html")
-
-	log.Info().Msgf("Serving index.html from: %s", templatePath)
-
-	tmpl, err := template.ParseFiles(templatePath)
 	if err != nil {
 		log.Error().Err(err).Msg("Error parsing template")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
