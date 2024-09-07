@@ -157,13 +157,16 @@ func processTextHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	var tmpl *template.Template
 	exeDir, err := os.Executable()
 	if err != nil {
-		tmpl, err = template.ParseFiles(index)
+		log.Error().Err(err).Msg("Error getting executable path")
+	}
+	templatePath := filepath.Join(filepath.Dir(exeDir), "index.html")
+	tmpl := template.New("index")
+	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
 		log.Info().Msg("Serving built-in index.html")
+		tmpl, err = tmpl.Parse(index)
 	} else {
-		templatePath := filepath.Join(filepath.Dir(exeDir), "index.html")
 		log.Info().Msgf("Serving index.html from: %s", templatePath)
 		tmpl, err = template.ParseFiles(templatePath)
 	}
